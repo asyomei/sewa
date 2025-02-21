@@ -25,10 +25,12 @@ type ExtractParam<Path, NextPart> = Path extends `**:${infer Param}`
       ? { [K in Param]: string } & NextPart
       : NextPart
 
-type ExtractParams<Path> = Simplify<
-  Path extends `${infer Segment}/${infer Rest}`
-    ? ExtractParam<Segment, ExtractParams<Rest>>
-    : ExtractParam<Path, {}>
+type ExtractParams<Path extends string> = Simplify<
+  string extends Path
+    ? Record<string, string | undefined>
+    : Path extends `${infer Segment}/${infer Rest}`
+      ? ExtractParam<Segment, ExtractParams<Rest>>
+      : ExtractParam<Path, {}>
 >
 
 export interface RouteIncomingMessage<T extends string> extends IncomingMessage {
@@ -37,7 +39,7 @@ export interface RouteIncomingMessage<T extends string> extends IncomingMessage 
   params: ExtractParams<T>
 }
 
-export type RouteHandler<T extends string = string> = (
+export type RouteHandler<T extends string = any> = (
   req: RouteIncomingMessage<T>,
   res: ServerResponse,
 ) => unknown
