@@ -1,8 +1,8 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http'
 import { isUint8Array } from 'node:util/types'
 import { type RouterContext, addRoute, createRouter, findRoute } from 'rou3'
-import { joinPaths } from './utils/join-paths'
 import { splitOnce } from './utils/take-to'
+import { fullTrimSlash, trimSlash } from './utils/trim-slash'
 
 export type Method =
   | 'GET'
@@ -32,9 +32,8 @@ type ExtractParams<Path> = Simplify<
 >
 
 export interface RouteIncomingMessage<T extends string> extends IncomingMessage {
-  pathname: string
   search: string
-  searchParams: URLSearchParams
+  pathname: string
   params: ExtractParams<T>
 }
 
@@ -43,24 +42,22 @@ export type RouteHandler<T extends string = string> = (
   res: ServerResponse,
 ) => unknown
 
-type Path = `/${string}`
-
-type AddPrefix<A extends Path, B extends Path> = A extends '/'
+type AddPrefix<A extends string, B extends string> = A extends '/'
   ? B
   : A extends `${infer C}/`
     ? `${C}${B}`
     : `${A}${B}`
 
-type MethodFunctions<T extends Path> = {
-  [K in Lowercase<Method>]: <P extends Path>(
+type MethodFunctions<T extends string> = {
+  [K in Lowercase<Method>]: <P extends string>(
     path: P,
     handler: RouteHandler<AddPrefix<T, P>>,
   ) => void
 }
 
-export type SewaRouter<T extends Path = '/'> = {
-  add<P extends Path>(method: string, path: P, handler: RouteHandler<AddPrefix<T, P>>): void
-  group<P extends Path>(prefix: P): SewaRouter<AddPrefix<T, P>>
+export type SewaRouter<T extends string = '/'> = {
+  add<P extends string>(method: string, path: P, handler: RouteHandler<AddPrefix<T, P>>): void
+  group<P extends string>(prefix: P): SewaRouter<AddPrefix<T, P>>
 } & MethodFunctions<T>
 
 export interface Sewa extends Server, SewaRouter {}
@@ -98,9 +95,8 @@ function makeHandler(rctx: RouterContext<RouteHandler>) {
     }
 
     const rreq = Object.assign(req, {
-      pathname: url,
       search,
-      searchParams: new URLSearchParams(search),
+      pathname: url,
       params: route.params ?? {},
     })
 
@@ -114,12 +110,17 @@ function makeHandler(rctx: RouterContext<RouteHandler>) {
   }
 }
 
-function createSewaRouter<T extends Path>(
+function createSewaRouter<T extends string>(
   rctx: RouterContext<RouteHandler>,
   group: T,
 ): SewaRouter<T> {
+  const groupTrimmed = trimSlash(group)
+
   function add(method: string, path: string, handler: RouteHandler) {
-    addRoute(rctx, method, joinPaths(group, path), handler)
+    if (!path.startsWith('/')) {
+      throw new Error(`Route should starts with / (got: '${path}')`)
+    }
+    addRoute(rctx, method, groupTrimmed + fullTrimSlash(path), handler)
   }
 
   const funcs = {} as unknown as MethodFunctions<T>
@@ -131,7 +132,11 @@ function createSewaRouter<T extends Path>(
   return Object.assign(funcs, {
     add,
     group(path: string) {
-      return createSewaRouter(rctx, joinPaths(group, path) as any)
+      if (path === '/') return this as any
+      if (!path.startsWith('/')) {
+        throw new Error(`Route should starts with / (got: '${path}')`)
+      }
+      return createSewaRouter(rctx, groupTrimmed + fullTrimSlash(path))
     },
   })
 }
