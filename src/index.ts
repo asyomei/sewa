@@ -100,26 +100,27 @@ function makeHandler(rctx: RouterContext<RouteHandler>) {
       pathname: url,
     })
 
-    for (const route of routes) {
-      const rreq = Object.assign(hreq, {
-        params: route.params ?? {},
-      })
+    iterateRoutes()
 
-      const message = route.data(rreq, res)
-      if (message === sewaNext) continue
+    async function iterateRoutes() {
+      for (const route of routes) {
+        const rreq = Object.assign(hreq, {
+          params: route.params ?? {},
+        })
 
-      if (message instanceof Promise) {
-        message.then(x => send(res, x))
-      } else {
+        let message = route.data(rreq, res)
+        if (message instanceof Promise) message = await message
+
+        if (message === sewaNext) continue
+
         send(res, message)
+        return
       }
-      return
-    }
 
-    if (!res.writableEnded) {
-      res.setHeader('Content-Type', 'text/html')
-      res.end('<h1>404 Not Found</h1>')
-      return
+      if (!res.writableEnded) {
+        res.setHeader('Content-Type', 'text/html')
+        res.end('<h1>404 Not Found</h1>')
+      }
     }
   }
 }
