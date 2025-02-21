@@ -1,6 +1,6 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http'
 import { isUint8Array } from 'node:util/types'
-import { type RouterContext, addRoute, createRouter, findRoute } from 'rou3'
+import { type RouterContext, addRoute, createRouter, findAllRoutes } from 'rou3'
 import { splitOnce } from './utils/take-to'
 import { fullTrimSlash, trimSlash } from './utils/trim-slash'
 
@@ -51,12 +51,12 @@ type AddPrefix<A extends string, B extends string> = A extends '/'
 type MethodFunctions<T extends string> = {
   [K in Lowercase<Method>]: <P extends string>(
     path: P,
-    handler: RouteHandler<AddPrefix<T, P>>,
+    ...handler: RouteHandler<AddPrefix<T, P>>[]
   ) => void
 }
 
 export type SewaRouter<T extends string = '/'> = {
-  add<P extends string>(method: string, path: P, handler: RouteHandler<AddPrefix<T, P>>): void
+  add<P extends string>(method: string, path: P, ...handler: RouteHandler<AddPrefix<T, P>>[]): void
   group<P extends string>(prefix: P): SewaRouter<AddPrefix<T, P>>
 } & MethodFunctions<T>
 
@@ -80,32 +80,44 @@ function send(res: ServerResponse, message: unknown) {
   } else if (message !== undefined) {
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify(message))
+  } else if (!res.writableEnded) {
+    res.end()
   }
 }
+
+export const sewaNext = Symbol('next')
 
 function makeHandler(rctx: RouterContext<RouteHandler>) {
   return function handle(req: IncomingMessage, res: ServerResponse) {
     const [url, search] = splitOnce(req.url ?? '/', '?')
 
-    const route = findRoute(rctx, req.method ?? 'GET', url)
-    if (!route) {
-      res.setHeader('Content-Type', 'text/html')
-      res.end('<h1>404 Not Found</h1>')
+    const routes = findAllRoutes(rctx, req.method ?? 'GET', url)
+
+    const hreq = Object.assign(req, {
+      search,
+      pathname: url,
+    })
+
+    for (const route of routes) {
+      const rreq = Object.assign(hreq, {
+        params: route.params ?? {},
+      })
+
+      const message = route.data(rreq, res)
+      if (message === sewaNext) continue
+
+      if (message instanceof Promise) {
+        message.then(x => send(res, x))
+      } else {
+        send(res, message)
+      }
       return
     }
 
-    const rreq = Object.assign(req, {
-      search,
-      pathname: url,
-      params: route.params ?? {},
-    })
-
-    const message = route.data(rreq, res)
-
-    if (message instanceof Promise) {
-      message.then(x => send(res, x))
-    } else {
-      send(res, message)
+    if (!res.writableEnded) {
+      res.setHeader('Content-Type', 'text/html')
+      res.end('<h1>404 Not Found</h1>')
+      return
     }
   }
 }
@@ -116,17 +128,20 @@ function createSewaRouter<T extends string>(
 ): SewaRouter<T> {
   const groupTrimmed = trimSlash(group)
 
-  function add(method: string, path: string, handler: RouteHandler) {
+  function add(method: string, path: string, ...handler: RouteHandler[]) {
     if (!path.startsWith('/')) {
       throw new Error(`Route should starts with / (got: '${path}')`)
     }
-    addRoute(rctx, method, groupTrimmed + fullTrimSlash(path), handler)
+    path = groupTrimmed + fullTrimSlash(path)
+    for (const h of handler) {
+      addRoute(rctx, method, path, h)
+    }
   }
 
   const funcs = {} as unknown as MethodFunctions<T>
   for (const method of METHODS) {
     const id = method.toLowerCase() as Lowercase<Method>
-    funcs[id] = (path: string, handler: RouteHandler) => add(method, path, handler)
+    funcs[id] = (path: string, ...handler: RouteHandler[]) => add(method, path, ...handler)
   }
 
   return Object.assign(funcs, {

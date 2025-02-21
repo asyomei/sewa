@@ -50,6 +50,21 @@ function addRoutes(sewa: SewaRouter) {
 
 addRoutes(sewa.group('/api'))
 
+import { sewaNext } from '@pyonpyon/sewa'
+
+// GET /test
+// logs 'test route' and writes data
+sewa.get(
+  '/test',
+  () => {
+    console.log('test route')
+    return sewaNext
+  },
+  () => {
+    return { data: 42 }
+  },
+)
+
 const host = process.env.HOST ?? 'localhost'
 const port = process.env.PORT ?? 8000
 sewa.listen({ host, port }, () => {
