@@ -2,8 +2,8 @@ import { execa } from 'execa'
 import { safeParse } from 'valibot'
 import { app } from '#/app'
 import { DeploySewaSchema } from '#/schemas'
+import { onLocal } from '#/utils/command'
 import { pretty } from '#/utils/pretty'
-import { onRemote } from '#/utils/remote'
 
 app.post('/deploy/sewa', async c => {
   const { output: body, issues } = safeParse(DeploySewaSchema, await c.req.parseBody())
@@ -19,7 +19,7 @@ app.post('/deploy/sewa', async c => {
   cmdList.push('&&', 'pm2', 'restart', body.name)
 
   const withDist = execa({ stdin: body.dist.stream(), reject: false })
-  const result = await withDist(...onRemote(body.sshdest, cmdList))
+  const result = await withDist(...onLocal(cmdList))
 
   if (result.failed) {
     const { stdout, stderr } = result
