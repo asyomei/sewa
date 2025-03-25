@@ -16,7 +16,6 @@ app.post('/deploy/sewa', async c => {
   const cmdList = []
   cmdList.push('mkdir', '-p', body.outpath)
   cmdList.push('&&', 'tar', '-xz', '-C', body.outpath)
-  cmdList.push('&&', 'pm2', 'restart', body.name)
 
   const withDist = execa({ stdin: body.dist.stream(), reject: false })
   const result = await withDist(...onLocal(cmdList))
@@ -27,5 +26,6 @@ app.post('/deploy/sewa', async c => {
     return c.text(pretty('Success: false', 'stdout:', stdout, 'stderr:', stderr))
   }
 
+  setTimeout(() => execa`pm2 restart ${body.name}`, 1000)
   return c.text(pretty('Success: true'))
 })
