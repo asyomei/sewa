@@ -1,3 +1,4 @@
+import './middlewares'
 import './routes'
 import { serve } from '@hono/node-server'
 import { showRoutes } from 'hono/dev'

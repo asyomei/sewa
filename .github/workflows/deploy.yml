@@ -31,5 +31,6 @@ jobs:
       - name: Deploy
         run: bash deploy.sh
         env:
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
           NAME: ${{ vars.NAME }}
           OUTPATH: ${{ vars.OUTPATH }}
