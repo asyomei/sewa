@@ -1,6 +1,6 @@
 import { check, instance, object, pipe, string } from 'valibot'
 
-export const DeploySewaSchema = object({
+export const DeployGeneralSchema = object({
   name: string('name should be string'),
   dist: pipe(
     instance(File, 'dist should be file'),
