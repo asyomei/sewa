@@ -5,7 +5,7 @@ import { DeployGeneralSchema } from '#/schemas'
 import { onLocal } from '#/utils/command'
 import { pretty } from '#/utils/pretty'
 
-app.post('/deploy/ao', async c => {
+app.post('/deploy/asyomei.org', async c => {
   const { output: body, issues } = safeParse(DeployGeneralSchema, await c.req.parseBody())
 
   if (issues) {
